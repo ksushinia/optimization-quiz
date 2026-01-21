@@ -232,6 +232,16 @@
 
             /* Кнопки крупнее для пальцев */
             button.option-btn { padding: 18px; }
+
+            .topic-label {
+                font-size: 0.85rem;
+                color: #888;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 5px;
+                font-weight: 600;
+                min-height: 1.2em; /* Чтобы текст не прыгал, если надписи нет */
+            }
         }
     </style>
 </head>
@@ -285,6 +295,8 @@
                 <span id="timer">00:00</span>
             </div>
             <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+
+            <div id="topic-label" class="topic-label"></div>
 
             <h2 id="question-text" class="question-text">Текст вопроса</h2>
             <div class="options" id="options-container"></div>
@@ -436,18 +448,21 @@
 
         // 1. Собираем пул вопросов
         if (mode === 'all') {
-            // Собираем всё в одну кучу
+            // Собираем всё в одну кучу, добавляя метку темы
             Object.values(window.quizTopics).forEach(topic => {
-                pool = pool.concat(topic.questions);
+                // Создаем копию вопроса и добавляем поле topicName
+                const labeledQuestions = topic.questions.map(q => {
+                    return { ...q, topicName: topic.name };
+                });
+                pool = pool.concat(labeledQuestions);
             });
         } else {
             const topicKey = els.topicSelect.value;
-            pool = window.quizTopics[topicKey].questions;
-        }
-
-        if (pool.length === 0) {
-            alert("В выбранной категории нет вопросов.");
-            return;
+            const topicObj = window.quizTopics[topicKey];
+            // Тоже добавляем имя, чтобы логика была единой
+            pool = topicObj.questions.map(q => {
+                return { ...q, topicName: topicObj.name };
+            });
         }
 
         // 2. Перемешиваем
@@ -478,6 +493,8 @@
         els.opts.innerHTML = '';
 
         const data = currentQuestions[currentIdx];
+
+        document.getElementById('topic-label').textContent = data.topicName || '';
 
         // Обновление заголовков
         const prefix = isReviewMode ? "Работа над ошибками: " : "";
