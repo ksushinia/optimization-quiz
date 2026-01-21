@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Экзамен: Методы Оптимизации</title>
+    <style>
+        /* Базовые настройки */
+        * {
+            box-sizing: border-box; /* Важно для корректных отступов */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Изменено с center, чтобы контент не обрезался при скролле */
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        /* --- ЛЕЙАУТ (Обертка для Сайдбара и Теста) --- */
+        .layout-wrapper {
+            display: flex;
+            gap: 30px;
+            max-width: 1200px;
+            width: 100%;
+            align-items: flex-start;
+            margin-top: 2vh;
+        }
+
+        /* --- САЙДБАР (ПРОГРЕСС) --- */
+        .sidebar {
+            background: white;
+            width: 320px;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            flex-shrink: 0;
+            max-height: 85vh; /* Ограничение высоты */
+            overflow-y: auto; /* Скролл, если тем много */
+            position: sticky;
+            top: 20px;
+        }
+
+        .sidebar h3 {
+            margin-top: 0;
+            color: #444;
+            font-size: 1.1rem;
+            border-bottom: 2px solid #f4f4f9;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        /* Элемент списка тем */
+        .topic-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+            color: #666;
+            transition: background 0.2s;
+            cursor: default;
+        }
+        .topic-item:hover { background: #f9f9fc; }
+
+        /* Если тема пройдена успешно */
+        .topic-item.done {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .score-badge {
+            font-weight: bold;
+            font-size: 0.8rem;
+            background: #eee;
+            padding: 2px 8px;
+            border-radius: 12px;
+            min-width: 40px;
+            text-align: center;
+        }
+        .topic-item.done .score-badge {
+            background: #c8e6c9;
+            color: #1b5e20;
+        }
+
+        /* --- ОСНОВНОЙ КОНТЕЙНЕР ТЕСТА --- */
+        .container {
+            background: white;
+            flex-grow: 1; /* Занимает оставшееся место */
+            width: 100%;
+            max-width: 800px;
+            padding: 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        h1, h2 { color: #333; text-align: center; }
+        h1 { margin-top: 0; font-size: 1.8rem; }
+
+        /* Стили экранов */
+        .screen { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Настройки (Setup) */
+        .setup-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }
+
+        select, input {
+            width: 100%; padding: 12px; border-radius: 8px;
+            border: 1px solid #ddd; font-size: 1rem;
+            background: #fff;
+        }
+
+        .radio-group { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+        .radio-group label {
+            font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 8px;
+            background: #f8f9fa; padding: 10px 15px; border-radius: 8px; border: 1px solid #eee; transition: 0.2s;
+        }
+        .radio-group label:hover { border-color: #2196f3; background: #e3f2fd; }
+        .radio-group input { width: auto; margin: 0; }
+
+        /* Квиз */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; color: #777; font-size: 0.9rem; }
+        .progress-bar { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 5px; }
+        .progress-fill { height: 100%; background: #4caf50; width: 0%; transition: width 0.3s ease; }
+
+        .question-text {
+            font-size: 1.3rem; margin-bottom: 1.5rem; line-height: 1.5;
+            text-align: left; font-weight: 600;
+        }
+
+        .options { display: flex; flex-direction: column; gap: 12px; }
+
+        button.option-btn {
+            padding: 16px; border: 2px solid #e0e0e0; background: white;
+            border-radius: 10px; cursor: pointer; text-align: left;
+            font-size: 1rem; transition: all 0.2s; color: #444; position: relative;
+            line-height: 1.4;
+        }
+        button.option-btn:hover:not([disabled]) { border-color: #2196f3; background: #f0f8ff; transform: translateX(5px); }
+        button.option-btn:active:not([disabled]) { transform: scale(0.98); }
+
+        button.correct { background-color: #d4edda !important; border-color: #28a745 !important; color: #155724 !important; }
+        button.wrong { background-color: #f8d7da !important; border-color: #dc3545 !important; color: #721c24 !important; }
+
+        /* Кнопки управления */
+        .action-btn {
+            width: 100%; padding: 16px; background: #2196f3; color: white;
+            border: none; border-radius: 10px; font-size: 1.1rem; font-weight: 600;
+            cursor: pointer; margin-top: 25px; transition: background 0.2s;
+            box-shadow: 0 4px 6px rgba(33, 150, 243, 0.2);
+        }
+        .action-btn:hover { background: #1976d2; box-shadow: 0 6px 8px rgba(33, 150, 243, 0.3); }
+        .action-btn:active { transform: translateY(1px); }
+
+        .secondary-btn { background: #6c757d; margin-top: 15px; box-shadow: none; }
+        .secondary-btn:hover { background: #5a6268; }
+
+        /* Результаты */
+        .stats-box {
+            background: #f8f9fa; padding: 25px; border-radius: 12px;
+            margin: 25px 0; text-align: center;
+            display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px;
+        }
+        .stat-item { display: flex; flex-direction: column; gap: 5px; font-size: 1rem; color: #666; }
+        .stat-value { font-weight: 800; color: #2196f3; font-size: 1.8rem; }
+
+        /* --- НОВЫЙ БЛОК: Дружелюбные ошибки --- */
+        .mistakes-card {
+            background: #fff8e1; /* Мягкий желтый */
+            border: 2px solid #ffe082;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            color: #795548;
+            text-align: center;
+            animation: fadeIn 0.5s;
+        }
+        .mistakes-card h3 {
+            margin: 0 0 10px 0;
+            color: #f57c00;
+            font-size: 1.2rem;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .review-btn {
+            background: #ffb300;
+            color: #fff;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.1);
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+            margin-top: 10px;
+            transition: 0.2s;
+        }
+        .review-btn:hover { background: #ffa000; transform: scale(1.05); }
+
+        /* --- АДАПТИВНОСТЬ (МОБИЛЬНЫЕ) --- */
+        @media (max-width: 900px) {
+            .layout-wrapper {
+                flex-direction: column-reverse; /* Сначала Тест, потом Прогресс внизу */
+                align-items: center;
+                margin-top: 0;
+            }
+
+            .sidebar {
+                width: 100%;
+                max-width: 100%;
+                position: static; /* Убираем липкость на мобильном */
+                max-height: 300px;
+                margin-top: 20px;
+            }
+
+            .container {
+                width: 100%;
+                padding: 1.5rem; /* Чуть меньше отступы */
+            }
+
+            h1 { font-size: 1.5rem; }
+            .question-text { font-size: 1.1rem; }
+
+            /* Кнопки крупнее для пальцев */
+            button.option-btn { padding: 18px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="layout-wrapper">
+    <!-- ЛЕВАЯ КОЛОНКА: ПРОГРЕСС -->
+    <aside class="sidebar">
+        <h3>Ваш прогресс</h3>
+        <div id="progress-list">
+            <!-- Сюда JS добавит список тем -->
+            <p style="color:#999; font-size: 0.9rem;">Загрузка тем...</p>
+        </div>
+        <div style="margin-top: 20px; padding-top:10px; border-top: 2px solid #f4f4f9;">
+            <small style="color: #999;">Данные сохраняются в браузере</small>
+            <button onclick="resetProgress()" style="border:none; background:none; color:#dc3545; cursor:pointer; font-size:0.8rem; display:block; margin-top:5px;">Сбросить прогресс</button>
+        </div>
+    </aside>
+
+    <!-- ПРАВАЯ КОЛОНКА: ТЕСТ (Старый Container) -->
+    <div class="container">
+        <!-- ЭКРАН 1: НАСТРОЙКИ -->
+        <div id="setup-screen" class="screen active">
+            <h1>🎓 Подготовка к экзамену</h1>
+
+            <div class="setup-group">
+                <label>Режим тестирования:</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="mode" value="all" checked onchange="toggleMode()"> 🎲 Микс (Все темы)</label>
+                    <label><input type="radio" name="mode" value="topic" onchange="toggleMode()"> 📚 Выбрать тему</label>
+                </div>
+            </div>
+
+            <div class="setup-group" id="topic-select-group" style="display: none;">
+                <label>Выберите тему:</label>
+                <select id="topic-select"></select>
+            </div>
+
+            <div class="setup-group">
+                <label>Количество вопросов:</label>
+                <select id="count-select"></select>
+            </div>
+
+            <button class="action-btn" onclick="startQuiz()">Начать тест</button>
+        </div>
+
+        <!-- ЭКРАН 2: КВИЗ -->
+        <div id="quiz-screen" class="screen">
+            <div class="header">
+                <span id="progress-text">Вопрос 1/10</span>
+                <span id="timer">00:00</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+
+            <h2 id="question-text" class="question-text">Текст вопроса</h2>
+            <div class="options" id="options-container"></div>
+
+            <button class="action-btn" id="next-btn" style="display: none;">Дальше</button>
+        </div>
+
+        <!-- ЭКРАН 3: РЕЗУЛЬТАТЫ (ОБНОВЛЕННЫЙ) -->
+        <div id="score-screen" class="screen">
+            <h1 id="result-title">Тест завершен! 🎉</h1>
+
+            <div class="stats-box">
+                <div class="stat-item">Результат: <span class="stat-value" id="score-percent">0%</span></div>
+                <div class="stat-item">Верно: <span id="score-absolute">0/0</span></div>
+                <div class="stat-item">Время: <span id="time-taken">00:00</span></div>
+            </div>
+
+            <!-- Дружелюбный блок ошибок -->
+            <div id="mistakes-actions" class="mistakes-card" style="display: none;">
+                <h3>🧐 Есть зоны роста</h3>
+                <p>Мы нашли несколько вопросов, где стоит освежить знания. Пройдемся по ним еще раз?</p>
+                <button class="review-btn" onclick="startReview()">Разобрать ошибки</button>
+            </div>
+
+            <button class="action-btn secondary-btn" onclick="location.reload()">Вернуться в меню</button>
+        </div>
+    </div>
+</div>
+
+<!-- Тут подключаем скрипты JS (q1.js и т.д.) как было -->
+
+<!-- ПОДКЛЮЧЕНИЕ ФАЙЛОВ С ВОПРОСАМИ -->
+<!-- Добавляй сюда новые файлы по мере создания: q1.js, q2.js ... q32.js -->
+<script src="q1.js"></script>
+<script src="q2.js"></script>
+<script src="q3.js"></script>
+<script src="q4.js"></script>
+<script src="q5.js"></script>
+<script src="q6.js"></script>
+<script src="q7.js"></script>
+<script src="q8.js"></script>
+<script src="q9.js"></script>
+<script src="q10.js"></script>
+<script src="q11.js"></script>
+<script src="q12.js"></script>
+<script src="q13.js"></script>
+<script src="q14.js"></script>
+<script src="q15.js"></script>
+<script src="q16.js"></script>
+<script src="q17.js"></script>
+<script src="q18.js"></script>
+<script src="q19.js"></script>
+<script src="q20.js"></script>
+<script src="q21.js"></script>
+<script src="q22.js"></script>
+<script src="q23.js"></script>
+<script src="q24.js"></script>
+<script src="q25.js"></script>
+<script src="q26.js"></script>
+<script src="q27.js"></script>
+<script src="q28.js"></script>
+<script src="q29.js"></script>
+
+<!-- <script src="q3.js"></script> -->
+
+<script>
+    // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
+    let currentQuestions = []; // Текущий пул вопросов
+    let currentIdx = 0;
+    let score = 0;
+    let wrongAnswers = []; // Массив объектов вопросов, где были ошибки
+    let startTime;
+    let timerInterval;
+    let isReviewMode = false;
+
+    // Ссылка на DOM элементы
+    const els = {
+        setup: document.getElementById('setup-screen'),
+        quiz: document.getElementById('quiz-screen'),
+        results: document.getElementById('score-screen'),
+        topicGroup: document.getElementById('topic-select-group'),
+        topicSelect: document.getElementById('topic-select'),
+        countSelect: document.getElementById('count-select'),
+        qText: document.getElementById('question-text'),
+        opts: document.getElementById('options-container'),
+        nextBtn: document.getElementById('next-btn'),
+        progText: document.getElementById('progress-text'),
+        progFill: document.getElementById('progress-fill'),
+        timer: document.getElementById('timer'),
+        scorePercent: document.getElementById('score-percent'),
+        scoreAbs: document.getElementById('score-absolute'),
+        timeTaken: document.getElementById('time-taken'),
+        mistakesDiv: document.getElementById('mistakes-actions')
+    };
+
+    // --- ИНИЦИАЛИЗАЦИЯ ---
+    window.onload = function() {
+        if (!window.quizTopics || Object.keys(window.quizTopics).length === 0) {
+            alert("Файлы с вопросами не загружены или пусты!");
+            return;
+        }
+
+        // Заполняем список тем
+        for (let key in window.quizTopics) {
+            let opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = window.quizTopics[key].name;
+            els.topicSelect.appendChild(opt);
+        }
+
+        updateCountOptions('all');
+    };
+
+    // --- ЛОГИКА НАСТРОЕК ---
+    function toggleMode() {
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        if (mode === 'topic') {
+            els.topicGroup.style.display = 'block';
+            updateCountOptions('topic');
+        } else {
+            els.topicGroup.style.display = 'none';
+            updateCountOptions('all');
+        }
+    }
+
+    function updateCountOptions(mode) {
+        els.countSelect.innerHTML = '';
+        let start, end, step;
+
+        if (mode === 'all') {
+            start = 10; end = 50; step = 5;
+        } else {
+            start = 5; end = 20; step = 5;
+        }
+
+        for (let i = start; i <= end; i += step) {
+            let opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = i;
+            els.countSelect.appendChild(opt);
+        }
+    }
+
+    // --- СТАРТ ТЕСТА ---
+    function startQuiz() {
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        const requestedCount = parseInt(els.countSelect.value);
+        let pool = [];
+
+        // 1. Собираем пул вопросов
+        if (mode === 'all') {
+            // Собираем всё в одну кучу
+            Object.values(window.quizTopics).forEach(topic => {
+                pool = pool.concat(topic.questions);
+            });
+        } else {
+            const topicKey = els.topicSelect.value;
+            pool = window.quizTopics[topicKey].questions;
+        }
+
+        if (pool.length === 0) {
+            alert("В выбранной категории нет вопросов.");
+            return;
+        }
+
+        // 2. Перемешиваем
+        pool.sort(() => Math.random() - 0.5);
+
+        // 3. Обрезаем до нужного количества (не больше, чем есть всего)
+        const finalCount = Math.min(requestedCount, pool.length);
+        currentQuestions = pool.slice(0, finalCount);
+
+        // Сброс состояния
+        currentIdx = 0;
+        score = 0;
+        wrongAnswers = [];
+        isReviewMode = false;
+
+        // Переключение экранов
+        els.setup.classList.remove('active');
+        els.quiz.classList.add('active');
+
+        // Таймер
+        startTimer();
+        loadQuestion();
+    }
+
+    // --- РЕНДЕР ВОПРОСА ---
+    function loadQuestion() {
+        els.nextBtn.style.display = 'none';
+        els.opts.innerHTML = '';
+
+        const data = currentQuestions[currentIdx];
+
+        // Обновление заголовков
+        const prefix = isReviewMode ? "Работа над ошибками: " : "";
+        els.progText.textContent = `${prefix}Вопрос ${currentIdx + 1} из ${currentQuestions.length}`;
+        els.progFill.style.width = `${((currentIdx + 1) / currentQuestions.length) * 100}%`;
+        els.qText.textContent = data.question;
+
+        // Создание кнопок
+        data.options.forEach((opt, index) => {
+            const btn = document.createElement('button');
+            btn.classList.add('option-btn');
+            btn.textContent = opt;
+            btn.onclick = () => checkAnswer(btn, index, data);
+            els.opts.appendChild(btn);
+        });
+    }
+
+    function checkAnswer(selectedBtn, selectedIdx, questionData) {
+        const buttons = els.opts.querySelectorAll('button');
+        buttons.forEach(btn => btn.disabled = true); // Блок кнопок
+
+        const isCorrect = (selectedIdx === questionData.correct);
+
+        if (isCorrect) {
+            selectedBtn.classList.add('correct');
+            if (!isReviewMode) score++;
+        } else {
+            selectedBtn.classList.add('wrong');
+            buttons[questionData.correct].classList.add('correct'); // Показать правильный
+
+            // Если не режим ревью, добавляем в список ошибок (избегая дублей)
+            if (!isReviewMode && !wrongAnswers.includes(questionData)) {
+                wrongAnswers.push(questionData);
+            }
+        }
+
+        els.nextBtn.style.display = 'block';
+    }
+
+    // --- НАВИГАЦИЯ ---
+    els.nextBtn.onclick = () => {
+        currentIdx++;
+        if (currentIdx < currentQuestions.length) {
+            loadQuestion();
+        } else {
+            finishQuiz();
+        }
+    };
+
+    // --- ЗАВЕРШЕНИЕ ---
+    function finishQuiz() {
+        stopTimer();
+        els.quiz.classList.remove('active');
+        els.results.classList.add('active');
+
+        if (isReviewMode) {
+            // Если это был режим ревью
+            els.scorePercent.textContent = "Завершено";
+            els.scoreAbs.textContent = "Ошибки разобраны";
+            els.mistakesDiv.style.display = 'none';
+        } else {
+            // Основной результат
+            const percent = Math.round((score / currentQuestions.length) * 100);
+            els.scorePercent.textContent = `${percent}%`;
+            els.scoreAbs.textContent = `${score} из ${currentQuestions.length}`;
+
+            if (wrongAnswers.length > 0) {
+                els.mistakesDiv.style.display = 'block';
+            } else {
+                els.mistakesDiv.style.display = 'none';
+            }
+        }
+    }
+
+    function startReview() {
+        // Настройка режима ошибок
+        currentQuestions = [...wrongAnswers]; // Копируем ошибки
+        // Перемешиваем ошибки тоже, чтобы было интереснее
+        currentQuestions.sort(() => Math.random() - 0.5);
+
+        currentIdx = 0;
+        isReviewMode = true;
+
+        els.results.classList.remove('active');
+        els.quiz.classList.add('active');
+        loadQuestion();
+    }
+
+    // --- ТАЙМЕР ---
+    function startTimer() {
+        startTime = Date.now();
+        els.timer.textContent = "00:00";
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            const delta = Math.floor((Date.now() - startTime) / 1000);
+            const m = String(Math.floor(delta / 60)).padStart(2, '0');
+            const s = String(delta % 60).padStart(2, '0');
+            els.timer.textContent = `${m}:${s}`;
+        }, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(timerInterval);
+        if (!isReviewMode) {
+            // Сохраняем время только для основного теста
+            els.timeTaken.textContent = els.timer.textContent;
+        }
+    }
+
+    // --- НОВАЯ ЛОГИКА ПРОГРЕССА ---
+
+    // Загрузка прогресса из LocalStorage
+    function getProgress() {
+        const saved = localStorage.getItem('examProgress');
+        return saved ? JSON.parse(saved) : {};
+    }
+
+    function saveProgress(topicKey, percent) {
+        const progress = getProgress();
+        // Сохраняем лучший результат
+        if (!progress[topicKey] || percent > progress[topicKey]) {
+            progress[topicKey] = percent;
+            localStorage.setItem('examProgress', JSON.stringify(progress));
+        }
+        renderSidebar();
+    }
+
+    function resetProgress() {
+        if(confirm("Вы уверены, что хотите сбросить весь прогресс?")) {
+            localStorage.removeItem('examProgress');
+            renderSidebar();
+        }
+    }
+
+    // Отрисовка сайдбара
+    function renderSidebar() {
+        const list = document.getElementById('progress-list');
+        list.innerHTML = '';
+        const progress = getProgress();
+
+        // Сортируем темы по ключу (чтобы шли по порядку q1, q2...)
+        const sortedKeys = Object.keys(window.quizTopics).sort((a,b) => {
+            // Пытаемся извлечь номер темы из названия для сортировки
+            const numA = parseInt(window.quizTopics[a].name) || 0;
+            const numB = parseInt(window.quizTopics[b].name) || 0;
+            return numA - numB;
+        });
+
+        sortedKeys.forEach(key => {
+            const topic = window.quizTopics[key];
+            const bestScore = progress[key];
+
+            const div = document.createElement('div');
+            div.className = 'topic-item';
+
+            // Если результат > 80%, считаем тему сданной (зеленой)
+            if (bestScore !== undefined) {
+                if (bestScore >= 80) div.classList.add('done');
+                div.innerHTML = `
+                    <span>${topic.name}</span>
+                    <span class="score-badge">${bestScore}%</span>
+                `;
+            } else {
+                div.innerHTML = `
+                    <span>${topic.name}</span>
+                    <span class="score-badge" style="background:white; color:#ccc;">—</span>
+                `;
+            }
+
+            list.appendChild(div);
+        });
+    }
+
+    // --- ОБНОВЛЕННАЯ ИНИЦИАЛИЗАЦИЯ ---
+    window.onload = function() {
+        if (!window.quizTopics || Object.keys(window.quizTopics).length === 0) {
+            alert("Файлы с вопросами не загружены!");
+            return;
+        }
+
+        // Заполняем выпадающий список
+        for (let key in window.quizTopics) {
+            let opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = window.quizTopics[key].name;
+            els.topicSelect.appendChild(opt);
+        }
+
+        updateCountOptions('all');
+
+        // НОВОЕ: Рисуем сайдбар при старте
+        renderSidebar();
+    };
+
+    // --- ОБНОВЛЕННАЯ ФУНКЦИЯ ФИНИША ---
+    function finishQuiz() {
+        stopTimer();
+        els.quiz.classList.remove('active');
+        els.results.classList.add('active');
+
+        const resultTitle = document.getElementById('result-title');
+
+        if (isReviewMode) {
+            // Режим работы над ошибками
+            resultTitle.textContent = "Отличная работа! 👏";
+            els.scorePercent.textContent = "Готово";
+            els.scoreAbs.textContent = "Ошибки разобраны";
+            els.mistakesDiv.style.display = 'none';
+        } else {
+            // Основной режим
+            const percent = Math.round((score / currentQuestions.length) * 100);
+            els.scorePercent.textContent = `${percent}%`;
+            els.scoreAbs.textContent = `${score} из ${currentQuestions.length}`;
+
+            // Меняем заголовок в зависимости от результата
+            if (percent === 100) resultTitle.textContent = "Идеально! 🏆";
+            else if (percent >= 80) resultTitle.textContent = "Хороший результат! 👍";
+            else resultTitle.textContent = "Тест завершен";
+
+            // НОВОЕ: Сохраняем прогресс (только если выбран режим конкретной темы)
+            const mode = document.querySelector('input[name="mode"]:checked').value;
+            if (mode === 'topic') {
+                saveProgress(els.topicSelect.value, percent);
+            }
+
+            // Показываем блок ошибок, если они есть
+            if (wrongAnswers.length > 0) {
+                els.mistakesDiv.style.display = 'block';
+            } else {
+                els.mistakesDiv.style.display = 'none';
+            }
+        }
+    }
+
+</script>
+
+</body>
+</html>
